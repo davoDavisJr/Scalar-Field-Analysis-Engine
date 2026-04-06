@@ -79,7 +79,6 @@ def plot_zero_contours(X: np.ndarray,
     created_ax = ax is None
     if created_ax:
         fig, ax = plt.subplots()
-        print(type(ax))
 
     ax.contour(X, Y, DFDX, levels=[level], colors=colors[0])
     ax.contour(X, Y, DFDY, levels=[level], colors=colors[1])
