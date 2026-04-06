@@ -1,0 +1,74 @@
+{
+    // Neutral baseline workspace: safe UX defaults only.
+    // No environment, toolchain, or course-specific behavior.
+    "folders": [
+        {
+        "path": "."
+        }
+    ],
+    "settings": {
+        "editor.bracketPairColorization.enabled": true,
+        "editor.cursorSmoothCaretAnimation": "on",
+        "editor.detectIndentation": false,
+        "editor.fontSize": 16,
+        "editor.formatOnSave": false,
+        "editor.guides.bracketPairs": true,
+        "editor.guides.highlightActiveIndentation": true,
+        "editor.guides.indentation": true,
+        "editor.lineHeight": 22,
+        "editor.minimap.enabled": false,
+        "editor.renderWhitespace": "selection",
+        "editor.rulers": [
+            80,
+            100
+        ],
+        "editor.semanticHighlighting.enabled": true,
+        "editor.smoothScrolling": true,
+        "editor.tabSize": 4,
+        "explorer.compactFolders": false,
+        "explorer.confirmDelete": true,
+        "explorer.confirmDragAndDrop": true,
+        "extensions.ignoreRecommendations": false,
+        "files.associations": {
+            "*.md": "markdown",
+            "*.tpp": "cpp"
+        },
+        "files.autoGuessEncoding": false,
+        "files.exclude": {
+            "**/__pycache__": true,
+            "**/*.pyc": true,
+            "**/.DS_Store": true,
+            "**/Thumbs.db": true,
+            "**/.git": true
+        },
+        "files.insertFinalNewline": true,
+        "files.trimTrailingWhitespace": true,
+        "git.autofetch": true,
+        "git.enableSmartCommit": true,
+        "search.exclude": {
+            "**/build": true,
+            "**/*.aux": true,
+            "**/*.log": true,
+            "**/*.out": true,
+            "**/*.synctex.gz": true,
+            "**/*.toc": true
+        },
+        "terminal.integrated.enablePersistentSessions": true,
+        "workbench.editor.enablePreview": false,
+        "workbench.startupEditor": "none",
+        "workbench.tree.indent": 16
+    },
+    "extensions": {
+        "recommendations": [
+            "tal7aouy.theme",
+            "ms-python.debugpy",
+            "ms-python.python",
+            "ms-python.python-environments",
+            "ms-python.vscode-pylance",
+            "ms-toolsai.jupyter",
+            "ms-toolsai.jupyter-cell-tags",
+            "ms-toolsai.jupyter-keymap",
+            "ms-toolsai.jupyter-renderers"
+        ]
+    }
+}
