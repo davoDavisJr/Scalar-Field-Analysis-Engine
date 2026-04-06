@@ -22,6 +22,7 @@ def plot_scalar_field(X: np.ndarray,
 
     if filled:
         artist = ax.contourf(X, Y, Z, levels=levels, cmap=cmap)
+        cbar = ax.figure.colorbar(artist, ax=ax)
     else:
         artist = ax.contour(X, Y, Z, levels=levels, cmap=cmap)
 
