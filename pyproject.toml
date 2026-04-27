@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "scalar-field-analysis-engine"
+version = "0.1.0"
+description = "Symbolic, numeric, and GPU-backed visualization tools for 2D scalar fields."
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [
+    { name = "Dovid Davis" },
+]
+dependencies = [
+    "matplotlib>=3.10",
+    "numpy>=2.4",
+    "scipy>=1.17",
+    "sympy>=1.14",
+]
+
+[project.optional-dependencies]
+render3d = [
+    "vispy[pyqt6]>=0.16.1",
+]
+test = [
+    "pytest>=8",
+]
+
+[project.scripts]
+scalar-field-viewer = "scalar_field_analysis.rendering.cli:main"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+py-modules = ["field_analysis", "plotting", "pixel_clamp"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["scalar_field_analysis*", "Renderer*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "gpu: requires a working VisPy backend and OpenGL context",
+]
