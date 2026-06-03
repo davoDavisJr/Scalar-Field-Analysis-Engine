@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from math import ceil, sqrt
 
 import numpy as np
 
 from .payload import CameraPreset, SurfacePayload, prepare_z_for_display
+
+MAX_RENDER_VERTICES = 250_000
+MAX_UNSCALED_Z_ASPECT = 4.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -32,6 +36,9 @@ class SceneStats:
     span_y: float
     span_z: float
     grid_shape: tuple[int, int]
+    z_auto_scale: float = 1.0
+    z_display_scale: float = 1.0
+    render_shape: tuple[int, int] = (0, 0)
 
 
 @dataclass(frozen=True, slots=True)
@@ -84,7 +91,47 @@ def normalize_for_colormap(z: np.ndarray) -> np.ndarray:
     return ((z - z_min) / (z_max - z_min)).astype(np.float32, copy=False)
 
 
-def compute_scene_stats(payload: SurfacePayload, z_display: np.ndarray) -> SceneStats:
+def compute_auto_z_scale(
+    x: np.ndarray,
+    y: np.ndarray,
+    z_prepared: np.ndarray,
+) -> float:
+    """Keep extreme z-ranges visible without amplifying small variations."""
+
+    span_x = float(np.max(x) - np.min(x))
+    span_y = float(np.max(y) - np.min(y))
+    span_z = float(np.max(z_prepared) - np.min(z_prepared))
+    xy_span = max(span_x, span_y, 1e-6)
+    if span_z <= xy_span * MAX_UNSCALED_Z_ASPECT:
+        return 1.0
+    return xy_span / span_z
+
+
+def render_indices(length: int, stride: int) -> np.ndarray:
+    if stride <= 1:
+        return np.arange(length)
+    indices = np.arange(0, length, stride)
+    if indices[-1] != length - 1:
+        indices = np.append(indices, length - 1)
+    return indices
+
+
+def render_stride(shape: tuple[int, int], max_vertices: int = MAX_RENDER_VERTICES) -> int:
+    n_rows, n_cols = shape
+    total_vertices = n_rows * n_cols
+    if total_vertices <= max_vertices:
+        return 1
+    return max(1, ceil(sqrt(total_vertices / max_vertices)))
+
+
+def compute_scene_stats(
+    payload: SurfacePayload,
+    z_display: np.ndarray,
+    *,
+    z_auto_scale: float = 1.0,
+    render_shape: tuple[int, int] | None = None,
+) -> SceneStats:
+    render_shape = render_shape or payload.x.shape
     x_min = float(np.min(payload.x))
     x_max = float(np.max(payload.x))
     y_min = float(np.min(payload.y))
@@ -114,24 +161,40 @@ def compute_scene_stats(payload: SurfacePayload, z_display: np.ndarray) -> Scene
         span_x=span_x,
         span_y=span_y,
         span_z=span_z,
+        z_auto_scale=z_auto_scale,
+        z_display_scale=z_auto_scale * payload.z_scale,
         grid_shape=payload.x.shape,
+        render_shape=render_shape,
     )
 
 
 def build_mesh_data(payload: SurfacePayload) -> MeshData:
     payload.validate()
 
-    z_display = prepare_z_for_display(payload.z, payload.scale_mode)
-    z_display = (z_display * payload.z_scale).astype(np.float32, copy=False)
+    z_prepared = prepare_z_for_display(payload.z, payload.scale_mode)
+    z_auto_scale = compute_auto_z_scale(payload.x, payload.y, z_prepared)
+    z_display = (z_prepared * z_auto_scale * payload.z_scale).astype(
+        np.float32,
+        copy=False,
+    )
     z_norm = normalize_for_colormap(z_display)
     cmap = get_colormap_lut(payload.colormap_name)
     colors = cmap[(z_norm * 255).astype(np.uint8)]
 
+    stride = render_stride(payload.x.shape)
+    row_idx = render_indices(payload.x.shape[0], stride)
+    col_idx = render_indices(payload.x.shape[1], stride)
+    mesh_slice = np.ix_(row_idx, col_idx)
+    x_mesh = payload.x[mesh_slice]
+    y_mesh = payload.y[mesh_slice]
+    z_mesh = z_display[mesh_slice]
+    color_mesh = colors[mesh_slice]
+
     vertices = np.column_stack(
-        [payload.x.ravel(), payload.y.ravel(), z_display.ravel()]
+        [x_mesh.ravel(), y_mesh.ravel(), z_mesh.ravel()]
     ).astype(np.float32, copy=False)
 
-    n_rows, n_cols = payload.x.shape
+    n_rows, n_cols = x_mesh.shape
     faces = np.empty(((n_rows - 1) * (n_cols - 1) * 2, 3), dtype=np.uint32)
 
     k = 0
@@ -150,9 +213,14 @@ def build_mesh_data(payload: SurfacePayload) -> MeshData:
     return MeshData(
         vertices=vertices,
         faces=faces,
-        vertex_colors=colors.reshape(-1, 4).astype(np.float32, copy=False),
+        vertex_colors=color_mesh.reshape(-1, 4).astype(np.float32, copy=False),
         z_display=z_display,
-        stats=compute_scene_stats(payload, z_display),
+        stats=compute_scene_stats(
+            payload,
+            z_display,
+            z_auto_scale=z_auto_scale,
+            render_shape=x_mesh.shape,
+        ),
     )
 
 
@@ -191,12 +259,14 @@ def sample_display_z_nearest(payload: SurfacePayload, x: float, y: float) -> flo
     dy = payload.y - y
     idx = np.unravel_index(np.argmin(dx * dx + dy * dy), payload.x.shape)
     z_raw = float(payload.z[idx])
+    z_prepared = prepare_z_for_display(payload.z, payload.scale_mode)
+    z_auto_scale = compute_auto_z_scale(payload.x, payload.y, z_prepared)
     z_display = float(
         prepare_z_for_display(np.array([z_raw], dtype=np.float32), payload.scale_mode)[
             0
         ]
     )
-    return z_display * payload.z_scale
+    return z_display * z_auto_scale * payload.z_scale
 
 
 def build_marker_specs(payload: SurfacePayload, stats: SceneStats) -> list[MarkerSpec]:
@@ -246,6 +316,7 @@ def build_hud_lines(
         f"Scale mode: {payload.scale_mode}",
         f"Color: {payload.colormap_name} mapped to displayed z",
         f"Vertical scale: {payload.z_scale:.2f}x",
+        f"Auto z normalization: {stats.z_auto_scale:.3g}x",
         f"Ground plane: {payload.ground_plane_mode}",
         f"Camera preset: {payload.camera_preset}",
         (
@@ -254,6 +325,9 @@ def build_hud_lines(
         ),
         f"Z shown: [{stats.z_display_min:.3g}, {stats.z_display_max:.3g}]",
         f"Raw Z: [{stats.z_raw_min:.3g}, {stats.z_raw_max:.3g}]",
-        f"Grid: {stats.grid_shape[0]} x {stats.grid_shape[1]}",
+        (
+            f"Grid: {stats.grid_shape[0]} x {stats.grid_shape[1]}"
+            f" (rendered {stats.render_shape[0]} x {stats.render_shape[1]})"
+        ),
         f"Backend: {backend}",
     ]

@@ -78,8 +78,40 @@ class RenderingCoreTests(unittest.TestCase):
         self.assertEqual(mesh.vertices.shape, (12, 3))
         self.assertEqual(mesh.faces.shape, (12, 3))
         self.assertEqual(mesh.vertex_colors.shape, (12, 4))
+        self.assertEqual(mesh.stats.grid_shape, (3, 4))
+        self.assertEqual(mesh.stats.render_shape, (3, 4))
+        self.assertEqual(mesh.stats.z_auto_scale, 1.0)
         np.testing.assert_array_equal(mesh.faces[0], np.array([0, 1, 4]))
         np.testing.assert_array_equal(mesh.faces[1], np.array([1, 5, 4]))
+
+    def test_extreme_z_range_is_scaled_for_display(self) -> None:
+        x_values = np.linspace(-50.0, 50.0, 10, dtype=np.float32)
+        y_values = np.linspace(-50.0, 50.0, 10, dtype=np.float32)
+        x, y = np.meshgrid(x_values, y_values)
+        z = x**3 - 3.0 * x * y**2
+
+        mesh = build_mesh_data(SurfacePayload(x=x, y=y, z=z))
+
+        self.assertLess(mesh.stats.z_auto_scale, 1.0)
+        self.assertLessEqual(
+            mesh.stats.span_z,
+            max(mesh.stats.span_x, mesh.stats.span_y),
+        )
+
+    def test_large_mesh_is_downsampled_for_rendering(self) -> None:
+        x_values = np.linspace(-1.0, 1.0, 600, dtype=np.float32)
+        y_values = np.linspace(-1.0, 1.0, 600, dtype=np.float32)
+        x, y = np.meshgrid(x_values, y_values)
+        z = x * x + y * y
+
+        mesh = build_mesh_data(SurfacePayload(x=x, y=y, z=z))
+
+        self.assertEqual(mesh.stats.grid_shape, (600, 600))
+        self.assertLess(mesh.vertices.shape[0], x.size)
+        self.assertEqual(float(mesh.vertices[:, 0].min()), -1.0)
+        self.assertEqual(float(mesh.vertices[:, 0].max()), 1.0)
+        self.assertEqual(float(mesh.vertices[:, 1].min()), -1.0)
+        self.assertEqual(float(mesh.vertices[:, 1].max()), 1.0)
 
     def test_marker_specs_include_only_domain_points(self) -> None:
         mesh = build_mesh_data(sample_payload(colormap_name="blue_orange"))
